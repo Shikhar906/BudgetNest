@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 import { Wallet } from 'lucide-react';
 
 interface SignUpProps {
@@ -27,8 +27,8 @@ export const SignUp = ({ onToggle }: SignUpProps) => {
       return;
     }
 
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters');
       return;
     }
 
@@ -85,7 +85,7 @@ export const SignUp = ({ onToggle }: SignUpProps) => {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Enter password (min 8 characters)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -96,7 +96,7 @@ export const SignUp = ({ onToggle }: SignUpProps) => {
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Confirm your password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required

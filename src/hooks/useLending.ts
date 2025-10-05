@@ -1,34 +1,61 @@
 import { useState, useEffect } from 'react';
 import { LendingBorrowing } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { collection, doc, setDoc, query, where, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export const useLending = () => {
   const { user } = useAuth();
   const [records, setRecords] = useState<LendingBorrowing[]>([]);
 
   useEffect(() => {
-    if (!user) return;
-
-    const data = localStorage.getItem(`lending_${user.id}`);
-    if (data) {
-      setRecords(JSON.parse(data));
+    if (user) {
+      loadLendingData();
+    } else {
+      setRecords([]);
     }
   }, [user]);
 
-  const addRecord = (record: Omit<LendingBorrowing, 'id' | 'userId' | 'createdAt' | 'settled'>) => {
+  const loadLendingData = async () => {
     if (!user) return;
 
+    try {
+      const lendingQuery = query(
+        collection(db, 'lending'),
+        where('userId', '==', user.id)
+      );
+      const lendingSnapshot = await getDocs(lendingQuery);
+      const userLending = lendingSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LendingBorrowing[];
+      
+      setRecords(userLending);
+    } catch (error) {
+      console.error('Error loading lending data:', error);
+    }
+  };
+
+  const addRecord = async (record: Omit<LendingBorrowing, 'id' | 'userId' | 'createdAt' | 'settled'>) => {
+    if (!user) return;
+
+    const recordId = `${user.id}_${Date.now()}`;
     const newRecord: LendingBorrowing = {
       ...record,
-      id: `lending_${Date.now()}`,
+      id: recordId,
       userId: user.id,
       settled: false,
       createdAt: new Date().toISOString(),
     };
 
-    const updated = [...records, newRecord];
-    setRecords(updated);
-    localStorage.setItem(`lending_${user.id}`, JSON.stringify(updated));
+    try {
+      await setDoc(doc(db, 'lending', recordId), newRecord);
+      const updated = [...records, newRecord];
+      setRecords(updated);
+    } catch (error) {
+      console.error('Error adding lending record:', error);
+      throw error;
+    }
   };
 
   const toggleSettled = (id: string) => {

@@ -1,4 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { 
+  User as FirebaseUser,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  updateProfile as firebaseUpdateProfile
+} from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { User, AuthContextType, UserProfile } from '@/types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,88 +27,117 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Load user from localStorage on mount
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Get additional user data from Firestore
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const userData = userDoc.data();
+        
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseUser.email!,
+          name: userData?.name || firebaseUser.displayName || '',
+          createdAt: userData?.createdAt || new Date().toISOString(),
+          profile: userData?.profile || {}
+        });
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return unsubscribe;
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    // Simulate authentication - check if user exists in localStorage
-    const usersData = localStorage.getItem('users');
-    const users = usersData ? JSON.parse(usersData) : [];
-    
-    const foundUser = users.find((u: any) => u.email === email && u.password === password);
-    
-    if (foundUser) {
-      const userData: User = {
-        id: foundUser.id,
-        email: foundUser.email,
-        name: foundUser.name,
-        createdAt: foundUser.createdAt,
-        profile: foundUser.profile,
-      };
-      setUser(userData);
-      localStorage.setItem('currentUser', JSON.stringify(userData));
-    } else {
-      throw new Error('Invalid email or password');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error: any) {
+      console.error('Sign in error:', error);
+      
+      // Handle specific Firebase auth errors
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('User doesn\'t exist');
+      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        throw new Error('Wrong email id or password');
+      } else {
+        throw new Error(getFirebaseErrorMessage(error.code));
+      }
     }
   };
 
   const signUp = async (email: string, password: string, name: string) => {
-    // Simulate user registration
-    const usersData = localStorage.getItem('users');
-    const users = usersData ? JSON.parse(usersData) : [];
-    
-    // Check if user already exists
-    if (users.find((u: any) => u.email === email)) {
-      throw new Error('User already exists');
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+
+      // Update the user's display name
+      await firebaseUpdateProfile(firebaseUser, { displayName: name });
+
+      // Save additional user data to Firestore
+      await setDoc(doc(db, 'users', firebaseUser.uid), {
+        name,
+        email,
+        createdAt: new Date().toISOString(),
+        profile: {}
+      });
+
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      throw new Error(getFirebaseErrorMessage(error.code));
     }
-    
-    const newUser = {
-      id: `user_${Date.now()}`,
-      email,
-      password, // In production, this should be hashed
-      name,
-      createdAt: new Date().toISOString(),
-    };
-    
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
-    
-    const userData: User = {
-      id: newUser.id,
-      email: newUser.email,
-      name: newUser.name,
-      createdAt: newUser.createdAt,
-    };
-    
-    setUser(userData);
-    localStorage.setItem('currentUser', JSON.stringify(userData));
   };
 
-  const signOut = () => {
-    setUser(null);
-    localStorage.removeItem('currentUser');
+  const signOut = async () => {
+    try {
+      await firebaseSignOut(auth);
+      // Clear any local storage data
+      localStorage.clear();
+    } catch (error) {
+      console.error('Sign out error:', error);
+      throw error;
+    }
   };
 
-  const updateProfile = (profile: UserProfile) => {
+  const updateProfile = async (profile: UserProfile) => {
     if (!user) return;
-    
-    const updatedUser = { ...user, profile };
-    setUser(updatedUser);
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    
-    // Also update in users array
-    const usersData = localStorage.getItem('users');
-    const users = usersData ? JSON.parse(usersData) : [];
-    const updatedUsers = users.map((u: any) => 
-      u.id === user.id ? { ...u, profile } : u
-    );
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
+
+    try {
+      // Update Firestore document
+      await setDoc(doc(db, 'users', user.id), { profile }, { merge: true });
+
+      // Update local state
+      setUser(prev => prev ? { ...prev, profile } : null);
+    } catch (error) {
+      console.error('Update profile error:', error);
+      throw error;
+    }
+  };
+
+  const getFirebaseErrorMessage = (errorCode: string): string => {
+    switch (errorCode) {
+      case 'auth/user-not-found':
+        return 'User doesn\'t exist';
+      case 'auth/wrong-password':
+        return 'Wrong email id or password';
+      case 'auth/invalid-email':
+        return 'Invalid email address';
+      case 'auth/email-already-in-use':
+        return 'An account with this email already exists';
+      case 'auth/weak-password':
+        return 'Password must be at least 8 characters long';
+      case 'auth/too-many-requests':
+        return 'Too many failed attempts. Please try again later';
+      case 'auth/invalid-credential':
+        return 'Wrong email id or password';
+      case 'auth/user-disabled':
+        return 'This account has been disabled';
+      default:
+        return 'An error occurred. Please try again';
+    }
   };
 
   return (
