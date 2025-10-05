@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBTP0Mh0uR1NfCkDPFSvo93ZL3asqr3gUs",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "budgetnest-7a2e6.firebaseapp.com",
   projectId: "budgetnest-7a2e6",
   storageBucket: "budgetnest-7a2e6.firebasestorage.app",

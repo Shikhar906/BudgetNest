@@ -40,6 +40,29 @@
    }
    ```
 
+## Firebase API Key Security
+
+- The Firebase API key is now loaded from an environment variable (`.env` file) and is no longer hardcoded in the codebase.
+- **Never commit your `.env` file or any secrets to a public repository.**
+- If your API key was leaked, immediately rotate it in the Google Cloud Console and update your `.env` file with the new key.
+- `.env` is now included in `.gitignore` to prevent accidental commits.
+
+### How to set up your API key
+1. Copy your new Firebase API key from the Google Cloud Console.
+2. Open the `.env` file in the project root (create it if it doesn't exist).
+3. Add this line (replace with your actual key):
+
+   ```env
+   VITE_FIREBASE_API_KEY=your_new_api_key_here
+   ```
+4. Save the file. Restart your dev server if running.
+
+### Rotating a Leaked Key
+- Go to the [Google Cloud Console > Credentials](https://console.cloud.google.com/apis/credentials) and create a new API key.
+- Replace the old key in your `.env` file.
+- Delete or restrict the old key.
+- Check your Google Cloud usage for suspicious activity.
+
 ## What's Been Integrated
 
 ✅ **Firebase Authentication**
