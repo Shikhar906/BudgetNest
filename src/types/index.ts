@@ -35,6 +35,9 @@ export interface Budget {
   createdAt: string;
   previousMonthSavings?: number; // Savings carried over from previous month
   currentMonthSavings?: number;  // Savings from current month's remaining amount
+  isCompleted?: boolean;         // Whether this month's budget is completed
+  finalSavings?: number;         // Final savings amount when month is completed
+  completedAt?: string;          // When the month was completed
 }
 
 export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];

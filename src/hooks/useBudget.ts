@@ -40,9 +40,15 @@ export const useBudget = () => {
       
       setBudgets(userBudgets);
       
-      // Set current month's budget
+      // Set current month's budget and check for month change
       const currentMonth = new Date().toISOString().slice(0, 7);
       const current = userBudgets.find(budget => budget.month === currentMonth);
+      
+      // Check if we need to handle month transition
+      if (!current && userBudgets.length > 0) {
+        await handleMonthTransition(userBudgets, currentMonth);
+      }
+      
       setCurrentBudget(current || null);
 
       // Load expenses from Firestore
@@ -62,18 +68,48 @@ export const useBudget = () => {
     }
   };
 
+  const handleMonthTransition = async (userBudgets: Budget[], currentMonth: string) => {
+    // Find the most recent budget (previous month)
+    const sortedBudgets = userBudgets.sort((a, b) => b.month.localeCompare(a.month));
+    const lastBudget = sortedBudgets[0];
+    
+    if (lastBudget && lastBudget.month < currentMonth) {
+      // Month has changed! Preserve the previous month's savings
+      console.log(`Month transition detected: ${lastBudget.month} → ${currentMonth}`);
+      
+      // Calculate final savings from the previous month
+      const finalSavings = lastBudget.remaining || 0;
+      
+      // Mark the previous month's budget as completed
+      await updateDoc(doc(db, 'budgets', lastBudget.id), {
+        isCompleted: true,
+        finalSavings: finalSavings,
+        completedAt: new Date().toISOString()
+      });
+      
+      console.log(`Preserved ${finalSavings} as savings from ${lastBudget.month}`);
+    }
+  };
+
   const createBudget = async (totalBudget: number, previousSavings: number = 0) => {
     if (!user) return;
 
     const currentMonth = new Date().toISOString().slice(0, 7);
     const budgetId = `${user.id}_${currentMonth}`;
     
+    // If previousSavings is not provided, try to get it from the last month's budget
+    let actualPreviousSavings = previousSavings;
+    if (previousSavings === 0) {
+      const lastMonthSavings = await getLastMonthSavings();
+      actualPreviousSavings = lastMonthSavings;
+    }
+    
     const newBudget: Budget = {
       id: budgetId,
       userId: user.id,
       month: currentMonth,
       totalBudget,
-      previousMonthSavings: previousSavings,
+      previousMonthSavings: actualPreviousSavings,
       currentMonthSavings: 0,
       remaining: totalBudget,
       createdAt: new Date().toISOString(),
@@ -89,6 +125,35 @@ export const useBudget = () => {
     } catch (error) {
       console.error('Error creating budget:', error);
       throw error;
+    }
+  };
+
+  const getLastMonthSavings = async (): Promise<number> => {
+    if (!user) return 0;
+    
+    try {
+      // Get the previous month in YYYY-MM format
+      const now = new Date();
+      const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const previousMonthString = previousMonth.toISOString().slice(0, 7);
+      
+      // Find the budget for the previous month
+      const previousBudgetQuery = query(
+        collection(db, 'budgets'),
+        where('userId', '==', user.id),
+        where('month', '==', previousMonthString)
+      );
+      
+      const snapshot = await getDocs(previousBudgetQuery);
+      if (!snapshot.empty) {
+        const previousBudget = snapshot.docs[0].data() as Budget;
+        return previousBudget.finalSavings || previousBudget.remaining || 0;
+      }
+      
+      return 0;
+    } catch (error) {
+      console.error('Error getting last month savings:', error);
+      return 0;
     }
   };
   const updateBudget = async (budgetId: string, updates: Partial<Budget>) => {
@@ -252,5 +317,6 @@ export const useBudget = () => {
     getCurrentMonthExpenses,
     calculateSavings,
     updateMonthlySavings,
+    getLastMonthSavings,
   };
 };

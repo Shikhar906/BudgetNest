@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,9 +13,28 @@ interface BudgetSetupProps {
 }
 
 export const BudgetSetup = ({ onComplete }: BudgetSetupProps) => {
-  const { createBudget } = useBudget();
+  const { createBudget, getLastMonthSavings } = useBudget();
   const [totalBudget, setTotalBudget] = useState('');
   const [previousSavings, setPreviousSavings] = useState('');
+  const [autoSavings, setAutoSavings] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+
+  // Automatically fetch previous month's savings
+  useEffect(() => {
+    const fetchPreviousSavings = async () => {
+      try {
+        const savings = await getLastMonthSavings();
+        setAutoSavings(savings);
+        setPreviousSavings(savings.toString());
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching previous savings:', error);
+        setLoading(false);
+      }
+    };
+    
+    fetchPreviousSavings();
+  }, [getLastMonthSavings]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,8 +94,13 @@ export const BudgetSetup = ({ onComplete }: BudgetSetupProps) => {
                 value={previousSavings}
                 onChange={setPreviousSavings}
               />
+              {autoSavings > 0 && (
+                <p className="text-xs text-success">
+                  ✓ Auto-detected {formatIndianCurrency(autoSavings)} from last month
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
-                Any existing savings from before (optional)
+                Savings carried over from previous month
               </p>
             </div>
             <div className="pt-4 border-t">
