@@ -25,7 +25,10 @@ export const BudgetSetup = ({ onComplete }: BudgetSetupProps) => {
       try {
         const savings = await getLastMonthSavings();
         setAutoSavings(savings);
-        setPreviousSavings(savings.toString());
+        // Only set previousSavings if it's currently empty (don't override user input)
+        if (!previousSavings && savings > 0) {
+          setPreviousSavings(savings.toString());
+        }
         setLoading(false);
       } catch (error) {
         console.error('Error fetching previous savings:', error);
@@ -34,7 +37,7 @@ export const BudgetSetup = ({ onComplete }: BudgetSetupProps) => {
     };
     
     fetchPreviousSavings();
-  }, [getLastMonthSavings]);
+  }, [getLastMonthSavings]); // Removed previousSavings from dependency array
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,17 +91,39 @@ export const BudgetSetup = ({ onComplete }: BudgetSetupProps) => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="previousSavings">Previous Savings (₹)</Label>
-              <CurrencyInput
-                id="previousSavings"
-                placeholder="0"
-                value={previousSavings}
-                onChange={setPreviousSavings}
-              />
-              {autoSavings > 0 && (
-                <p className="text-xs text-success">
-                  ✓ Auto-detected {formatIndianCurrency(autoSavings)} from last month
-                </p>
-              )}
+              <div className="space-y-2">
+                <CurrencyInput
+                  id="previousSavings"
+                  placeholder="0"
+                  value={previousSavings}
+                  onChange={setPreviousSavings}
+                />
+                {autoSavings > 0 && (
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-success flex-1">
+                      ✓ Auto-detected {formatIndianCurrency(autoSavings)} from last month
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPreviousSavings(autoSavings.toString())}
+                      className="text-xs h-6 px-2"
+                    >
+                      Use Auto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPreviousSavings('')}
+                      className="text-xs h-6 px-2"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
                 Savings carried over from previous month
               </p>
